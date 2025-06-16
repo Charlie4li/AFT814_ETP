@@ -1,7 +1,4 @@
-using System.Collections;
-using System.Collections.Generic;
 using UnityEngine;
-using UnityEngine.Animations;
 using UnityEngine.InputSystem;
 
 public class PlayerMovement : MonoBehaviour
@@ -20,7 +17,7 @@ public class PlayerMovement : MonoBehaviour
     [Header("Movement Related")]
     public float movementSpeed = 5;
     public float jumpForce = 10f;
-    public float launchForce = 15f; // Adjustable launch force
+    public float launchForce = 15f;
 
     [Header("Ground Check Related")]
     public Vector2 BoxSize;
@@ -28,8 +25,12 @@ public class PlayerMovement : MonoBehaviour
     public LayerMask groundLayer;
 
     [Header("VFX")]
-    public GameObject launchVFXPrefab; // Assign your VFX prefab in inspector
-    public Transform vfxSpawnPoint; // Where the VFX should spawn
+    public GameObject launchVFXPrefab;
+    public Transform vfxSpawnPoint;
+
+    [Header("Animation")]
+    public Animator playerAnimator;
+    public float movementThreshold = 0.1f;
 
     private bool isFacingRight = true;
 
@@ -47,6 +48,11 @@ public class PlayerMovement : MonoBehaviour
 
         playerInputActions.Walking.Jump.started += IA_JumpStarted;
         playerInputActions.Walking.Jump.Enable();
+
+        if (playerAnimator == null)
+        {
+            playerAnimator = GetComponent<Animator>();
+        }
     }
 
     private void Start()
@@ -56,15 +62,15 @@ public class PlayerMovement : MonoBehaviour
 
     private void FixedUpdate()
     {
-        // Handle movement in FixedUpdate for physics
         MovePlayer();
     }
 
-    void Update()
+    private void Update()
     {
         movementInput = ia_Movement.ReadValue<float>();
         FlipSpriteHorizontallyBasedOnInput();
         CalculateSpeed();
+        UpdateAnimation();
     }
 
     private void MovePlayer()
@@ -75,9 +81,16 @@ public class PlayerMovement : MonoBehaviour
         }
         else
         {
-            // Allow some air control but less than on ground
             rbPlayer.linearVelocity = new Vector2(movementInput * movementSpeed * 0.7f, rbPlayer.linearVelocity.y);
         }
+    }
+
+    private void UpdateAnimation()
+    {
+        bool isMoving = Mathf.Abs(movementInput) > movementThreshold && Mathf.Abs(rbPlayer.linearVelocity.x) > 0.1f;
+        playerAnimator.SetBool("IsMoving", isMoving);
+        playerAnimator.SetBool("IsGrounded", IsTouchingGround());
+        playerAnimator.SetFloat("MoveSpeed", Mathf.Abs(movementInput));
     }
 
     public bool IsTouchingGround()
@@ -106,16 +119,15 @@ public class PlayerMovement : MonoBehaviour
         if (IsTouchingGround())
         {
             rbPlayer.AddForce(new Vector2(0, jumpForce), ForceMode2D.Impulse);
+            playerAnimator.SetTrigger("Jump");
         }
     }
 
     public void InteractionExecution()
     {
-        // Launch the player backwards
         Vector2 launchDirection = isFacingRight ? Vector2.left : Vector2.right;
         rbPlayer.AddForce(launchDirection * launchForce, ForceMode2D.Impulse);
 
-        // Spawn VFX
         if (launchVFXPrefab != null && vfxSpawnPoint != null)
         {
             Instantiate(launchVFXPrefab, vfxSpawnPoint.position, Quaternion.identity);
@@ -150,7 +162,6 @@ public class PlayerMovement : MonoBehaviour
 
     private void OnDestroy()
     {
-        // Clean up input actions
         ia_Movement.Disable();
         ia_Interaction.Disable();
         playerInputActions.Walking.Jump.Disable();
